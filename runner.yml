@@ -316,42 +316,49 @@ Resources:
               content: !Sub |
                 concurrent = ${GitlabMaxConcurrentBuilds}
                 check_interval = 0
-
-                [[runners]]
-                  name = "${AWS::StackName}"
-                  url = "${GitlabUrl}"
-                  token = "${GitlabToken}"
-                  executor = "docker+machine"
-                  [runners.docker]
-                    tls_verify = false
-                    image = "ubuntu:latest"
-                    privileged = true
-                    disable_cache = true
-                    volumes = ["/cache"]
-                    shm_size = 0
-                  [runners.cache]
-                    Type = "s3"
-                    ServerAddress = "s3.${AWS::URLSuffix}"
-                    BucketName = "${CacheBucket}"
-                    BucketLocation = "${AWS::Region}"
-                    Shared = true
-                  [runners.machine]
-                    IdleCount = ${GitlabIdleCount}
-                    IdleTime = ${GitlabIdleTime}
-                    MaxBuilds = ${GitlabMaxConcurrentBuilds}
-                    MachineDriver = "amazonec2"
-                    MachineName = "gitlab-docker-machine-%s"
-                    MachineOptions = ["amazonec2-instance-type=${GitlabRunnerInstanceType}", "amazonec2-region=${AWS::Region}", "amazonec2-vpc-id=${VpcId}", "amazonec2-security-group=${AWS::StackName}-RunnersSecurityGroup", "amazonec2-use-private-address=true", "amazonec2-iam-instance-profile=${RunnersInstanceProfile}"]
-                    OffPeakTimezone = "${GitlabOffPeakTimezone}"
-                    OffPeakPeriods = ["* * 0-9,18-23 * * mon-fri *", "* * * * * sat,sun *"]
-                    OffPeakIdleCount = ${GitlabOffPeakIdleCount}
-                    OffPeakIdleTime = ${GitlabOffPeakIdleTime}
+                
             '/etc/rsyslog.d/25-gitlab-runner.conf':
               owner: 'root'
               group: 'root'
               mode: '000644'
               content: |
                 :programname, isequal, "gitlab-runner" /var/log/gitlab-runner.log
+          commands:
+            30-gitlab-runner-register:
+              command: !Sub >-
+                gitlab-runner register \
+                    --non-interactive \
+                      -u "${GitlabUrl}" \
+                      -r "${GitlabToken}" \
+                      --name "${AWS::StackName}" \
+                      --executor "docker+machine" \
+                      --locked=false \
+                      --docker-tlsverify=false \
+                      --docker-image=ubuntu:latest \
+                      --docker-disable-cache=true \
+                      --docker-privileged \
+                      --docker-shm-size=0 \
+                      --cache-type "s3" \
+                      --cache-s3-server-address "s3.${AWS::URLSuffix}" \
+                      --cache-s3-bucket-name "${CacheBucket}" \
+                      --cache-s3-bucket-location "${AWS::Region}" \
+                      --cache-cache-shared=true \
+                      --machine-idle-nodes ${GitlabIdleCount} \
+                      --machine-idle-time ${GitlabIdleTime} \
+                      --machine-max-builds ${GitlabMaxConcurrentBuilds} \
+                      --machine-machine-driver "amazonec2" \
+                      --machine-machine-name "gitlab-docker-machine-%s" \
+                      --machine-machine-options "amazonec2-instance-type=${GitlabRunnerInstanceType}" \
+                      --machine-machine-options "amazonec2-region=${AWS::Region}" \
+                      --machine-machine-options "amazonec2-vpc-id=${VpcId}" \
+                      --machine-machine-options "amazonec2-security-group=${AWS::StackName}-RunnersSecurityGroup" \
+                      --machine-machine-options "amazonec2-use-private-address=true" \
+                      --machine-machine-options "amazonec2-iam-instance-profile=${RunnersInstanceProfile}" \
+                      --machine-off-peak-periods "* * 0-9,18-23 * * mon-fri *" \
+                      --machine-off-peak-periods "* * * * * sat,sun *" \
+                      --machine-off-peak-timezone "${GitlabOffPeakTimezone}" \
+                      --machine-off-peak-idle-count ${GitlabOffPeakIdleCount} \
+                      --machine-off-peak-idle-time ${GitlabOffPeakIdleTime}
           services:
             sysvinit:
               gitlab-runner:
